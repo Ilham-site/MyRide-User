@@ -89,14 +89,14 @@
         </div>
         <div class="text-right">
           <span class="text-xs text-indigo-600 font-semibold block">HARGA ASAS <span id="outUkmTag" class="hidden text-[10px] bg-indigo-200 px-1 rounded text-indigo-800">Luar UKM</span></span>
-          <span id="priceTxt" class="text-2xl font-black text-indigo-600">RM 0.00</span>
+          <span id="priceTxt" class="text-2xl font-black text-indigo-600">RM 0</span>
         </div>
       </div>
 
-      <!-- Advanced Booking & Notes -->
+      <!-- Advanced Booking & Passengers -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
-          <label class="text-xs font-semibold text-gray-600 block mb-1">Masa Tempahan (Advanced Booking)</label>
+          <label class="text-xs font-semibold text-gray-600 block mb-1">Masa Tempahan</label>
           <select id="bookingType" onchange="toggleScheduleInput()" class="w-full p-2 border rounded-lg text-sm bg-white">
             <option value="now">Sekarang (Immediate)</option>
             <option value="scheduled">Tempah Masa Kemudian</option>
@@ -105,6 +105,15 @@
         <div id="scheduleTimeContainer" class="hidden">
           <label class="text-xs font-semibold text-gray-600 block mb-1">Pilih Masa</label>
           <input type="time" id="scheduledTime" class="w-full p-2 border rounded-lg text-sm">
+        </div>
+        <div>
+          <label class="text-xs font-semibold text-gray-600 block mb-1">Bilangan Penumpang</label>
+          <select id="passengerCount" class="w-full p-2 border rounded-lg text-sm bg-white">
+            <option value="1">1 Orang</option>
+            <option value="2">2 Orang</option>
+            <option value="3">3 Orang</option>
+            <option value="4">4 Orang</option>
+          </select>
         </div>
       </div>
 
@@ -141,12 +150,16 @@
 
     <!-- Active Order Status Panel -->
     <div id="activeOrderPanel" class="hidden bg-white p-5 rounded-xl shadow space-y-4 border-2 border-indigo-500">
+      
+      <!-- In-UI Notification Banner -->
+      <div id="uiNotification" class="hidden border p-3 rounded-lg text-sm font-bold text-center transition-all duration-300"></div>
+
       <div class="flex justify-between items-center border-b pb-3">
         <h3 class="font-bold text-gray-800">Status Pesanan</h3>
         <span id="orderStatusBadge" class="bg-amber-100 text-amber-800 text-xs px-3 py-1 rounded-full font-bold">MENCARI DRIVER</span>
       </div>
 
-      <!-- Driver Details Section (Now includes Car Plate & Model) -->
+      <!-- Driver Details Section -->
       <div id="driverDetails" class="hidden bg-gray-50 p-3 rounded-lg flex items-center space-x-4 border border-gray-200">
         <img id="driverPhoto" src="" class="w-14 h-14 rounded-full border-2 border-indigo-200 shadow-sm">
         <div class="flex-1">
@@ -160,6 +173,7 @@
       <div class="text-xs space-y-1 text-gray-600 bg-gray-50 p-3 rounded border border-gray-100">
         <p><strong>Pick Up:</strong> <span id="summaryPickup"></span></p>
         <p><strong>Drop Off:</strong> <span id="summaryDropoff"></span></p>
+        <p><strong>Penumpang:</strong> <span id="summaryPassengers"></span> Orang</p>
         <p><strong>Harga Akhir:</strong> <span id="summaryPrice" class="font-bold text-indigo-600 text-sm"></span></p>
       </div>
 
@@ -182,14 +196,6 @@
       <button onclick="cancelOrder()" class="w-full bg-rose-50 text-rose-600 border border-rose-200 py-2.5 rounded-lg text-xs font-bold hover:bg-rose-100">
         <i class="fa-solid fa-xmark mr-1"></i> Batal Pesanan
       </button>
-    </div>
-
-    <!-- History Order Section -->
-    <div class="bg-white p-5 rounded-xl shadow space-y-3">
-      <h3 class="font-bold text-gray-800 border-b pb-2"><i class="fa-solid fa-clock-rotate-left text-gray-500 mr-2"></i> Sejarah Pesanan</h3>
-      <div id="historyList" class="space-y-2 text-xs text-gray-500">
-        <p class="text-center py-2">Sila log masuk untuk melihat sejarah pesanan.</p>
-      </div>
     </div>
 
   </div>
@@ -233,10 +239,6 @@
     const auth = firebase.auth();
     const db = firebase.firestore();
 
-    // -----------------------------------------------------------------
-    // Google Apps Script Webhook (Untuk Hantar ke Google Sheets)
-    // Gantikan URL ini dengan URL Web App Google Apps Script anda nanti
-    // -----------------------------------------------------------------
     const GOOGLE_SHEET_WEBHOOK_URL = "YOUR_GOOGLE_APPS_SCRIPT_WEBAPP_URL"; 
 
     // -----------------------------------------------------------------
@@ -252,24 +254,21 @@
     let pickupCoords = null; 
     let dropoffCoords = null;
     let calculatedDistance = 0;
-    let calculatedPrice = 0.0;
+    let calculatedPrice = 0; // Digunakan nilai genap
     
-    // Pusat UKM (Untuk check luar/dalam UKM) - Koordinat Kolej/Masjid UKM
     const UKM_CENTER = { lat: 2.9289, lng: 101.7801 };
-    const MAX_UKM_RADIUS_KM = 5.0; // Jika melebihi 5km, dianggap luar UKM
+    const MAX_UKM_RADIUS_KM = 5.0;
 
     // -----------------------------------------------------------------
-    // INIT & AUTO LOGOUT LOGIC (1.5 Jam)
+    // INIT & AUTO LOGOUT
     // -----------------------------------------------------------------
     window.onload = function() {
-      // Setup map
       map = L.map('map').setView([2.9289, 101.7801], 14);
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '© OpenStreetMap'
       }).addTo(map);
 
-      // Check Auto Logout (90 minit = 90 * 60 * 1000 ms)
       const lastLogin = localStorage.getItem('myride_login_time');
       if (lastLogin) {
         const timeDiff = Date.now() - parseInt(lastLogin);
@@ -277,7 +276,6 @@
           alert("Sesi anda telah tamat selepas 1.5 jam. Sila log masuk semula.");
           googleLogout();
         } else {
-          // Set timer to auto logout if left open
           setTimeout(() => {
             alert("Auto log-keluar kerana tiada aktiviti selama 1.5 jam.");
             googleLogout();
@@ -287,7 +285,7 @@
     };
 
     // -----------------------------------------------------------------
-    // MAP SEARCH LOCATION (Geocoding via Nominatim API)
+    // MAP SEARCH LOCATION
     // -----------------------------------------------------------------
     async function searchLocation(type) {
       const inputId = type === 'pickup' ? 'pickupInput' : 'dropoffInput';
@@ -300,14 +298,13 @@
       document.getElementById(badgeId).className = "text-[10px] text-amber-500 mt-1 block";
 
       try {
-        // Tambah "Selangor, Malaysia" untuk lebih tepat
         const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query + ', Selangor, Malaysia')}&limit=1`);
         const data = await res.json();
 
         if (data.length > 0) {
           const lat = parseFloat(data[0].lat);
           const lng = parseFloat(data[0].lon);
-          const displayName = data[0].display_name.split(',')[0]; // Ambil nama ringkas
+          const displayName = data[0].display_name.split(',')[0];
 
           document.getElementById(inputId).value = displayName;
 
@@ -325,7 +322,6 @@
             document.getElementById(badgeId).className = "text-[10px] text-emerald-600 font-bold mt-1 block";
           }
           
-          // Re-center map to the new point
           map.setView([lat, lng], 15);
           calculateFare();
         } else {
@@ -338,10 +334,10 @@
     }
 
     // -----------------------------------------------------------------
-    // FORMULA KIRAAN TAMBANG & LUAR UKM CHECK
+    // KIRAAN TAMBANG & BUNDAR HARGA (GENAP)
     // -----------------------------------------------------------------
     function calculateDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371; // km
+      const R = 6371; 
       const dLat = (lat2 - lat1) * Math.PI / 180;
       const dLon = (lon2 - lon1) * Math.PI / 180;
       const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -353,17 +349,14 @@
     function calculateFare() {
       if (!pickupCoords || !dropoffCoords) return;
 
-      // Jarak dari pickup ke dropoff
       calculatedDistance = calculateDistance(pickupCoords.lat, pickupCoords.lng, dropoffCoords.lat, dropoffCoords.lng);
 
-      // Check Drop Off Luar UKM (Jarak dari koordinat tengah UKM melebihi 5km)
       const distFromUKM = calculateDistance(UKM_CENTER.lat, UKM_CENTER.lng, dropoffCoords.lat, dropoffCoords.lng);
       let isOutsideUKM = distFromUKM > MAX_UKM_RADIUS_KM;
 
       let basePriceToUse = isOutsideUKM ? 7.00 : 4.00;
       let totalFare = 0;
 
-      // Harga mengikut jarak (Sama seperti sebelumnya)
       if (calculatedDistance <= 5) {
         totalFare = calculatedDistance * 2.00;
       } else if (calculatedDistance <= 10) {
@@ -372,17 +365,16 @@
         totalFare = (5 * 2.00) + (5 * 1.50) + ((calculatedDistance - 10) * 1.00);
       }
 
-      // Pastikan harga tidak kurang daripada base price kawasan tersebut (RM4 dalam, RM7 luar)
       if (totalFare < basePriceToUse) {
         totalFare = basePriceToUse;
       }
 
-      calculatedPrice = totalFare;
+      // Membundarkan harga ke nilai ringgit yang genap ke atas
+      calculatedPrice = Math.ceil(totalFare);
 
       document.getElementById('distanceTxt').innerText = `${calculatedDistance.toFixed(2)} km`;
-      document.getElementById('priceTxt').innerText = `RM ${calculatedPrice.toFixed(2)}`;
+      document.getElementById('priceTxt').innerText = `RM ${calculatedPrice}`;
       
-      // Papar Label Luar UKM jika berkenaan
       const tag = document.getElementById('outUkmTag');
       if (isOutsideUKM) tag.classList.remove('hidden');
       else tag.classList.add('hidden');
@@ -396,7 +388,7 @@
     }
 
     // -----------------------------------------------------------------
-    // AUTHENTICATION & FIRST TIME LOGIN
+    // AUTHENTICATION
     // -----------------------------------------------------------------
     function googleLogin() {
       const provider = new firebase.auth.GoogleAuthProvider();
@@ -413,15 +405,12 @@
     auth.onAuthStateChanged(async (user) => {
       if (user) {
         currentUser = user;
-        localStorage.setItem('myride_login_time', Date.now()); // Reset 1.5 hr timer on reload
+        localStorage.setItem('myride_login_time', Date.now()); 
         updateUIOnLogin();
         
-        // Semak jika pengguna baru (tiada rekod umur/jantina)
         const userDoc = await db.collection('users').doc(user.uid).get();
         if (!userDoc.exists || !userDoc.data().age || !userDoc.data().gender) {
           document.getElementById('firstTimeModal').classList.remove('hidden');
-        } else {
-          loadOrderHistory();
         }
       } else {
         currentUser = null;
@@ -456,8 +445,25 @@
       }, { merge: true });
 
       document.getElementById('firstTimeModal').classList.add('hidden');
-      alert("Profil berjaya disimpan!");
-      loadOrderHistory();
+    }
+
+    // -----------------------------------------------------------------
+    // FUNGSI PAPAR MESEJ DALAM UI
+    // -----------------------------------------------------------------
+    function showUIMessage(message, type = 'info') {
+      const notif = document.getElementById('uiNotification');
+      notif.innerText = message;
+      notif.classList.remove('hidden', 'bg-indigo-100', 'text-indigo-800', 'border-indigo-300', 'bg-emerald-100', 'text-emerald-800', 'border-emerald-300', 'bg-rose-100', 'text-rose-800', 'border-rose-300', 'bg-amber-100', 'text-amber-800', 'border-amber-300');
+      
+      if (type === 'success') {
+        notif.classList.add('bg-emerald-100', 'text-emerald-800', 'border-emerald-300');
+      } else if (type === 'error') {
+        notif.classList.add('bg-rose-100', 'text-rose-800', 'border-rose-300');
+      } else if (type === 'warning') {
+        notif.classList.add('bg-amber-100', 'text-amber-800', 'border-amber-300');
+      } else {
+        notif.classList.add('bg-indigo-100', 'text-indigo-800', 'border-indigo-300');
+      }
     }
 
     // -----------------------------------------------------------------
@@ -467,9 +473,9 @@
       if (!currentUser) return alert("Sila log masuk terlebih dahulu.");
       if (!pickupCoords || !dropoffCoords) return alert("Sila cari dan setkan lokasi Pick Up & Drop Off!");
 
-      // Dapatkan Base Price (RM7 jika Luar UKM)
       const distFromUKM = calculateDistance(UKM_CENTER.lat, UKM_CENTER.lng, dropoffCoords.lat, dropoffCoords.lng);
       const isOutUkm = distFromUKM > MAX_UKM_RADIUS_KM;
+      const passengerQty = document.getElementById('passengerCount').value;
 
       const orderData = {
         customerId: currentUser.uid,
@@ -483,13 +489,19 @@
         dropoffLng: dropoffCoords.lng,
         distanceKm: calculatedDistance,
         originalPrice: calculatedPrice,
-        finalPrice: calculatedPrice, // Akan diubah oleh driver jika driver bagi potong harga
+        finalPrice: calculatedPrice,
         isOutUkm: isOutUkm,
+        passengerCount: parseInt(passengerQty), // Maklumat bilangan penumpang
         paymentMethod: document.querySelector('input[name="payment"]:checked').value,
         bookingType: document.getElementById('bookingType').value,
         scheduledTime: document.getElementById('bookingType').value === 'scheduled' ? document.getElementById('scheduledTime').value : 'ASAP',
         notes: document.getElementById('orderNotes').value,
         status: 'SEARCHING',
+        
+        // Tetapan Sistem Agihan 1 Driver
+        pingedDriverId: null,
+        rejectedBy: [],
+
         driverId: null,
         driverName: null,
         driverPhoto: null,
@@ -505,10 +517,12 @@
         
         document.getElementById('bookingSection').classList.add('hidden');
         document.getElementById('activeOrderPanel').classList.remove('hidden');
+        document.getElementById('uiNotification').classList.add('hidden');
 
         document.getElementById('summaryPickup').innerText = orderData.pickupAddress;
         document.getElementById('summaryDropoff').innerText = orderData.dropoffAddress;
-        document.getElementById('summaryPrice').innerText = `RM ${calculatedPrice.toFixed(2)}`;
+        document.getElementById('summaryPassengers').innerText = orderData.passengerCount;
+        document.getElementById('summaryPrice').innerText = `RM ${calculatedPrice}`;
 
         startSearchTimer();
         listenToOrderUpdates(currentOrderDocId);
@@ -536,7 +550,7 @@
     function expandSearchRange() {
       if (!currentOrderDocId) return;
       db.collection('orders').doc(currentOrderDocId).update({ expandedSearch: true });
-      alert("Pencarian diluaskan!");
+      showUIMessage("Pencarian diluaskan! Driver luar radius 2km kini boleh menerima order ini.", "info");
       document.getElementById('expandRangeBtn').classList.add('hidden');
     }
 
@@ -557,7 +571,6 @@
           clearInterval(searchTimer);
           document.getElementById('searchTimerMsg').classList.add('hidden');
           
-          // Papar Detail Driver
           document.getElementById('driverDetails').classList.remove('hidden');
           document.getElementById('driverName').innerText = data.driverName || 'Pemandu';
           document.getElementById('driverPhoto').src = data.driverPhoto || 'https://via.placeholder.com/50';
@@ -565,111 +578,73 @@
           document.getElementById('driverCarPlate').innerText = data.driverCarPlate || 'PLAT TIADA';
           document.getElementById('reportDriverBtn').classList.remove('hidden');
 
-          // Notifikasi jika pemandu memotong harga
           if (data.finalPrice < data.originalPrice) {
-            alert(`Pemandu telah menawarkan harga baharu: RM ${data.finalPrice.toFixed(2)}`);
+            showUIMessage(`Pemandu telah menawarkan diskaun harga baharu: RM ${data.finalPrice}`, "success");
+          } else {
+            showUIMessage("Pemandu telah menerima pesanan anda. Sila bersedia.", "success");
           }
-          document.getElementById('summaryPrice').innerText = `RM ${data.finalPrice.toFixed(2)}`;
+          document.getElementById('summaryPrice').innerText = `RM ${data.finalPrice}`;
 
         } else if (data.status === 'ARRIVED') {
-          alert("Pemandu telah sampai di lokasi Pick Up!");
+          showUIMessage("Pemandu telah sampai di lokasi Pick Up!", "warning");
         } else if (data.status === 'IN_PROGRESS') {
-          alert("Perjalanan bermula.");
+          showUIMessage("Perjalanan sedang berlangsung.", "info");
         } else if (data.status === 'COMPLETED') {
-          alert("Perjalanan selesai! Terima kasih.");
-          syncToGoogleSheet(data); // Hantar sejarah ke G-Sheets
-          resetOrderUI();
+          showUIMessage("Perjalanan selesai! Terima kasih kerana menggunakan MyRide.", "success");
+          syncToGoogleSheet(data); 
+          setTimeout(() => resetOrderUI(), 3000);
         } else if (data.status === 'CANCELLED') {
-          alert("Pesanan dibatalkan.");
-          syncToGoogleSheet(data); // Hantar ke G-Sheets walau batal
-          resetOrderUI();
+          showUIMessage("Pesanan telah dibatalkan.", "error");
+          syncToGoogleSheet(data);
+          setTimeout(() => resetOrderUI(), 3000);
         }
       });
     }
 
     async function cancelOrder() {
       if (!currentOrderDocId) return;
-
       const doc = await db.collection('orders').doc(currentOrderDocId).get();
       const data = doc.data();
 
       if (data.status === 'ACCEPTED' || data.status === 'ARRIVED') {
-        if (!confirm("Pembatalan memerlukan pampasan FPX RM3. Teruskan?")) return;
+        if (!confirm("Pembatalan mungkin memerlukan pampasan. Teruskan?")) return;
       }
-
       await db.collection('orders').doc(currentOrderDocId).update({ status: 'CANCELLED' });
     }
 
     function reportDriverLate() {
-      alert("Laporan pemandu lewat telah dihantar.");
+      showUIMessage("Laporan pemandu lewat telah dihantar ke sistem.", "error");
     }
 
-    // Fungsi KOSONGKAN/RESET Borang
     function resetOrderUI() {
       if (orderListener) orderListener();
       currentOrderDocId = null;
       
-      // Clear inputs
       document.getElementById('pickupInput').value = '';
       document.getElementById('dropoffInput').value = '';
       document.getElementById('orderNotes').value = '';
+      document.getElementById('passengerCount').value = '1';
       document.getElementById('pickupBadge').innerText = '';
       document.getElementById('dropoffBadge').innerText = '';
-      document.getElementById('priceTxt').innerText = 'RM 0.00';
+      document.getElementById('priceTxt').innerText = 'RM 0';
       document.getElementById('distanceTxt').innerText = '0.0 km';
       document.getElementById('outUkmTag').classList.add('hidden');
       
-      // Remove map pins
       if (pickupMarker) map.removeLayer(pickupMarker);
       if (dropoffMarker) map.removeLayer(dropoffMarker);
       pickupCoords = null;
       dropoffCoords = null;
 
-      // Hide panels
       document.getElementById('activeOrderPanel').classList.add('hidden');
       document.getElementById('driverDetails').classList.add('hidden');
       document.getElementById('reportDriverBtn').classList.add('hidden');
       document.getElementById('bookingSection').classList.remove('hidden');
-      
-      loadOrderHistory();
     }
 
     // -----------------------------------------------------------------
-    // HISTORY & GOOGLE SHEETS SYNC
+    // GOOGLE SHEETS SYNC
     // -----------------------------------------------------------------
-    function loadOrderHistory() {
-      if (!currentUser) return;
-      db.collection('orders')
-        .where('customerId', '==', currentUser.uid)
-        .orderBy('createdAt', 'desc')
-        .limit(5)
-        .get()
-        .then(snapshot => {
-          const list = document.getElementById('historyList');
-          if (snapshot.empty) {
-            list.innerHTML = `<p class="text-center py-2">Tiada sejarah pesanan.</p>`;
-            return;
-          }
-          let html = '';
-          snapshot.forEach(doc => {
-            const item = doc.data();
-            html += `
-              <div class="border p-2.5 rounded-lg flex justify-between items-center bg-gray-50">
-                <div>
-                  <p class="font-bold text-gray-800 text-xs">${item.dropoffAddress || 'Destinasi'}</p>
-                  <p class="text-[10px] text-gray-500">${item.paymentMethod.toUpperCase()} • RM ${item.finalPrice ? item.finalPrice.toFixed(2) : '0.00'}</p>
-                </div>
-                <span class="text-[10px] px-2 py-0.5 rounded font-bold ${item.status==='COMPLETED'?'bg-emerald-100 text-emerald-700':'bg-gray-200 text-gray-700'}">${item.status}</span>
-              </div>
-            `;
-          });
-          list.innerHTML = html;
-        });
-    }
-
-    // Fungsi Auto Send ke Google Sheets
     function syncToGoogleSheet(orderData) {
-      // Jika anda belum ada URL webhook, ia akan abaikan sahaja
       if (GOOGLE_SHEET_WEBHOOK_URL === "YOUR_GOOGLE_APPS_SCRIPT_WEBAPP_URL") return;
 
       const payload = {
@@ -689,9 +664,6 @@
         body: JSON.stringify(payload)
       }).catch(err => console.log("Gagal sync ke Google Sheets:", err));
     }
-  </script>
-</body>
-</html>
   </script>
 </body>
 </html>
