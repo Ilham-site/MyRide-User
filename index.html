@@ -159,7 +159,7 @@
 
       <div class="flex justify-between items-center border-b pb-3">
         <h3 class="font-bold text-gray-800">Status Pesanan</h3>
-        <span id="orderStatusBadge" class="bg-amber-100 text-amber-800 text-xs px-3 py-1 rounded-full font-bold">MENCARI DRIVER</span>
+        <span id="orderStatusBadge" class="bg-amber-100 text-amber-800 text-xs px-3 py-1 rounded-full font-bold uppercase">MENCARI DRIVER</span>
       </div>
 
       <!-- Driver Details Section -->
@@ -480,14 +480,14 @@
       const isOutUkm = distFromUKM > MAX_UKM_RADIUS_KM;
       const paxCount = parseInt(document.getElementById('passengerCount').value);
 
- const orderData = {
-        customerId: currentUser.uid || "",
-        customerName: currentUser.displayName || "Pelanggan",
-        customerPhoto: currentUser.photoURL || "", // Elak nilai null yang merosakkan driver UI
-        pickupAddress: document.getElementById('pickupInput').value || "",
+      const orderData = {
+        customerId: currentUser.uid,
+        customerName: currentUser.displayName,
+        customerPhoto: currentUser.photoURL,
+        pickupAddress: document.getElementById('pickupInput').value,
         pickupLat: pickupCoords.lat,
         pickupLng: pickupCoords.lng,
-        dropoffAddress: document.getElementById('dropoffInput').value || "",
+        dropoffAddress: document.getElementById('dropoffInput').value,
         dropoffLat: dropoffCoords.lat,
         dropoffLng: dropoffCoords.lng,
         distanceKm: calculatedDistance,
@@ -495,10 +495,10 @@
         finalPrice: calculatedPrice, 
         isOutUkm: isOutUkm,
         passengerCount: paxCount,
-        paymentMethod: document.querySelector('input[name="payment"]:checked').value || "cash",
-        bookingType: document.getElementById('bookingType').value || "now",
+        paymentMethod: document.querySelector('input[name="payment"]:checked').value,
+        bookingType: document.getElementById('bookingType').value,
         scheduledTime: document.getElementById('bookingType').value === 'scheduled' ? document.getElementById('scheduledTime').value : 'ASAP',
-        notes: document.getElementById('orderNotes').value || "",
+        notes: document.getElementById('orderNotes').value,
         status: 'SEARCHING',
         driverId: null,
         driverName: null,
@@ -506,11 +506,11 @@
         driverCarModel: null,
         driverCarPlate: null,
         expandedSearch: false,
-        pingedDriverId: null,
-        rejectedBy: [],
+        pingedDriverId: null, // Untuk sistem 1 driver 1 masa
+        rejectedBy: [],       // Array driver yang reject
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       };
-      
+
       try {
         const docRef = await db.collection('orders').add(orderData);
         currentOrderDocId = docRef.id;
@@ -566,11 +566,13 @@
         const data = doc.data();
 
         const badge = document.getElementById('orderStatusBadge');
-        badge.innerText = data.status;
+        badge.innerText = data.status === 'SCHEDULED_ACCEPTED' ? 'BERJADUAL DITERIMA' : data.status;
 
-        if (data.status === 'ACCEPTED') {
+        // BILA PEMANDU ACCEPT (BERJADUAL ATAU SEGERA)
+        if (data.status === 'SCHEDULED_ACCEPTED' || data.status === 'ACCEPTED') {
           clearInterval(searchTimer);
           document.getElementById('searchTimerMsg').classList.add('hidden');
+          document.getElementById('expandRangeBtn').classList.add('hidden');
           
           document.getElementById('driverDetails').classList.remove('hidden');
           document.getElementById('driverName').innerText = data.driverName || 'Pemandu';
@@ -579,13 +581,23 @@
           document.getElementById('driverCarPlate').innerText = data.driverCarPlate || 'PLAT TIADA';
           document.getElementById('reportDriverBtn').classList.remove('hidden');
 
-          if (data.finalPrice < data.originalPrice) {
-            showUIMessage(`<i class="fa-solid fa-tag mr-2"></i> Pemandu telah memberi diskaun! Harga baharu: <strong>RM ${Math.ceil(data.finalPrice)}</strong>`, 'success');
-          } else {
-            showUIMessage('<i class="fa-solid fa-circle-check mr-2"></i> Pemandu telah menerima pesanan anda. Sila tunggu.', 'success');
-          }
-          
           document.getElementById('summaryPrice').innerText = `${Math.ceil(data.finalPrice)}`;
+
+          // Mesej Berbeza ikut type tempahan
+          if (data.status === 'SCHEDULED_ACCEPTED') {
+            showUIMessage(`<i class="fa-solid fa-calendar-check mr-2"></i> Pemandu telah menempah slot berjadual anda untuk jam <strong>${data.scheduledTime}</strong>. Sila tunggu.`, 'success');
+          } else {
+            // Status = ACCEPTED
+            if (data.bookingType === 'scheduled') {
+              showUIMessage('<i class="fa-solid fa-car-side mr-2"></i> Masa telah tiba! Pemandu kini <strong>sedang dalam perjalanan</strong> ke lokasi anda.', 'success');
+            } else {
+              if (data.finalPrice < data.originalPrice) {
+                showUIMessage(`<i class="fa-solid fa-tag mr-2"></i> Pemandu telah memberi diskaun! Harga baharu: <strong>RM ${Math.ceil(data.finalPrice)}</strong>. Pemandu sedang ke lokasi.`, 'success');
+              } else {
+                showUIMessage('<i class="fa-solid fa-circle-check mr-2"></i> Pemandu telah menerima pesanan anda dan sedang ke lokasi.', 'success');
+              }
+            }
+          }
 
         } else if (data.status === 'ARRIVED') {
           showUIMessage('<i class="fa-solid fa-bullhorn mr-2"></i> <strong>Pemandu telah tiba di lokasi anda!</strong> Sila bersedia.', 'warning');
@@ -609,8 +621,8 @@
       const doc = await db.collection('orders').doc(currentOrderDocId).get();
       const data = doc.data();
 
-      if (data.status === 'ACCEPTED' || data.status === 'ARRIVED') {
-        if (!confirm("Pembatalan mungkin memerlukan pampasan FPX RM3. Teruskan?")) return;
+      if (data.status === 'ACCEPTED' || data.status === 'ARRIVED' || data.status === 'SCHEDULED_ACCEPTED') {
+        if (!confirm("Adakah anda pasti untuk membatalkan pesanan yang telah diterima oleh pemandu?")) return;
       }
 
       await db.collection('orders').doc(currentOrderDocId).update({ status: 'CANCELLED' });
