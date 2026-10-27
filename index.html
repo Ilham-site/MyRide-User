@@ -93,7 +93,7 @@
         </div>
       </div>
 
-      <!-- Advanced Booking & Passengers -->
+      <!-- Advanced Booking & Passenger Count -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label class="text-xs font-semibold text-gray-600 block mb-1">Masa Tempahan</label>
@@ -102,20 +102,22 @@
             <option value="scheduled">Tempah Masa Kemudian</option>
           </select>
         </div>
-        <div id="scheduleTimeContainer" class="hidden">
-          <label class="text-xs font-semibold text-gray-600 block mb-1">Pilih Masa</label>
-          <input type="time" id="scheduledTime" class="w-full p-2 border rounded-lg text-sm">
-        </div>
         <div>
           <label class="text-xs font-semibold text-gray-600 block mb-1">Bilangan Penumpang</label>
           <select id="passengerCount" class="w-full p-2 border rounded-lg text-sm bg-white">
-            <option value="1">1 Orang/People</option>
-            <option value="2">2 Orang/People</option>
-            <option value="3">3 Orang/People</option>
-            <option value="4">4 Orang/People</option>
-            <option value="5">5 Orang/People</option>
+            <option value="1">1 Orang</option>
+            <option value="2">2 Orang</option>
+            <option value="3">3 Orang</option>
+            <option value="4">4 Orang</option>
+            <option value="5">5 Orang</option>
+            <option value="6">6 Orang</option>
           </select>
         </div>
+      </div>
+
+      <div id="scheduleTimeContainer" class="hidden">
+        <label class="text-xs font-semibold text-gray-600 block mb-1">Pilih Masa</label>
+        <input type="time" id="scheduledTime" class="w-full p-2 border rounded-lg text-sm">
       </div>
 
       <!-- Payment Method -->
@@ -152,8 +154,8 @@
     <!-- Active Order Status Panel -->
     <div id="activeOrderPanel" class="hidden bg-white p-5 rounded-xl shadow space-y-4 border-2 border-indigo-500">
       
-      <!-- In-UI Notification Banner -->
-      <div id="uiNotification" class="hidden border p-3 rounded-lg text-sm font-bold text-center transition-all duration-300"></div>
+      <!-- In-UI Notification Banner (Replaces Alerts) -->
+      <div id="uiNotification" class="hidden w-full p-3 rounded-lg text-sm font-bold text-center transition-all"></div>
 
       <div class="flex justify-between items-center border-b pb-3">
         <h3 class="font-bold text-gray-800">Status Pesanan</h3>
@@ -174,8 +176,8 @@
       <div class="text-xs space-y-1 text-gray-600 bg-gray-50 p-3 rounded border border-gray-100">
         <p><strong>Pick Up:</strong> <span id="summaryPickup"></span></p>
         <p><strong>Drop Off:</strong> <span id="summaryDropoff"></span></p>
-        <p><strong>Penumpang:</strong> <span id="summaryPassengers"></span> Orang</p>
-        <p><strong>Harga Akhir:</strong> <span id="summaryPrice" class="font-bold text-indigo-600 text-sm"></span></p>
+        <p><strong>Penumpang:</strong> <span id="summaryPassenger"></span> Orang</p>
+        <p><strong>Harga Akhir:</strong> RM <span id="summaryPrice" class="font-bold text-indigo-600 text-sm"></span></p>
       </div>
 
       <!-- Dynamic Buttons (Expand Search, Report, Cancel) -->
@@ -255,13 +257,13 @@
     let pickupCoords = null; 
     let dropoffCoords = null;
     let calculatedDistance = 0;
-    let calculatedPrice = 0; // Digunakan nilai genap
+    let calculatedPrice = 0;
     
     const UKM_CENTER = { lat: 2.9289, lng: 101.7801 };
     const MAX_UKM_RADIUS_KM = 5.0;
 
     // -----------------------------------------------------------------
-    // INIT & AUTO LOGOUT
+    // INIT & AUTO LOGOUT LOGIC (1.5 Jam)
     // -----------------------------------------------------------------
     window.onload = function() {
       map = L.map('map').setView([2.9289, 101.7801], 14);
@@ -293,7 +295,7 @@
       const badgeId = type === 'pickup' ? 'pickupBadge' : 'dropoffBadge';
       let query = document.getElementById(inputId).value;
 
-      if (!query) return alert("Sila masukkan nama tempat!");
+      if (!query) return showUIMessage("Sila masukkan nama tempat!", "error");
       
       document.getElementById(badgeId).innerText = "Sedang mencari...";
       document.getElementById(badgeId).className = "text-[10px] text-amber-500 mt-1 block";
@@ -335,7 +337,7 @@
     }
 
     // -----------------------------------------------------------------
-    // KIRAAN TAMBANG & BUNDAR HARGA (GENAP)
+    // FORMULA KIRAAN TAMBANG & BUNDAR HARGA (TIADA SEN)
     // -----------------------------------------------------------------
     function calculateDistance(lat1, lon1, lat2, lon2) {
       const R = 6371; 
@@ -351,7 +353,6 @@
       if (!pickupCoords || !dropoffCoords) return;
 
       calculatedDistance = calculateDistance(pickupCoords.lat, pickupCoords.lng, dropoffCoords.lat, dropoffCoords.lng);
-
       const distFromUKM = calculateDistance(UKM_CENTER.lat, UKM_CENTER.lng, dropoffCoords.lat, dropoffCoords.lng);
       let isOutsideUKM = distFromUKM > MAX_UKM_RADIUS_KM;
 
@@ -370,11 +371,11 @@
         totalFare = basePriceToUse;
       }
 
-      // Membundarkan harga ke nilai ringgit yang genap ke atas
+      // Harga dibundarkan terus ke nilai ringgit seterusnya (Contoh: 4.20 -> 5)
       calculatedPrice = Math.ceil(totalFare);
 
       document.getElementById('distanceTxt').innerText = `${calculatedDistance.toFixed(2)} km`;
-      document.getElementById('priceTxt').innerText = `RM ${calculatedPrice}`;
+      document.getElementById('priceTxt').innerText = `RM ${calculatedPrice}`; // Tiada paparan sen .00
       
       const tag = document.getElementById('outUkmTag');
       if (isOutsideUKM) tag.classList.remove('hidden');
@@ -389,7 +390,21 @@
     }
 
     // -----------------------------------------------------------------
-    // AUTHENTICATION
+    // UI NOTIFICATION SYSTEM (Ganti Alert Pop-up)
+    // -----------------------------------------------------------------
+    function showUIMessage(msg, type = 'info') {
+      const notif = document.getElementById('uiNotification');
+      notif.innerHTML = msg;
+      notif.classList.remove('hidden', 'bg-emerald-100', 'text-emerald-800', 'bg-amber-100', 'text-amber-800', 'bg-rose-100', 'text-rose-800', 'bg-indigo-100', 'text-indigo-800');
+      
+      if (type === 'success') notif.classList.add('bg-emerald-100', 'text-emerald-800');
+      else if (type === 'warning') notif.classList.add('bg-amber-100', 'text-amber-800');
+      else if (type === 'error') notif.classList.add('bg-rose-100', 'text-rose-800');
+      else notif.classList.add('bg-indigo-100', 'text-indigo-800');
+    }
+
+    // -----------------------------------------------------------------
+    // AUTHENTICATION & FIRST TIME LOGIN
     // -----------------------------------------------------------------
     function googleLogin() {
       const provider = new firebase.auth.GoogleAuthProvider();
@@ -406,7 +421,7 @@
     auth.onAuthStateChanged(async (user) => {
       if (user) {
         currentUser = user;
-        localStorage.setItem('myride_login_time', Date.now()); 
+        localStorage.setItem('myride_login_time', Date.now());
         updateUIOnLogin();
         
         const userDoc = await db.collection('users').doc(user.uid).get();
@@ -449,34 +464,21 @@
     }
 
     // -----------------------------------------------------------------
-    // FUNGSI PAPAR MESEJ DALAM UI
-    // -----------------------------------------------------------------
-    function showUIMessage(message, type = 'info') {
-      const notif = document.getElementById('uiNotification');
-      notif.innerText = message;
-      notif.classList.remove('hidden', 'bg-indigo-100', 'text-indigo-800', 'border-indigo-300', 'bg-emerald-100', 'text-emerald-800', 'border-emerald-300', 'bg-rose-100', 'text-rose-800', 'border-rose-300', 'bg-amber-100', 'text-amber-800', 'border-amber-300');
-      
-      if (type === 'success') {
-        notif.classList.add('bg-emerald-100', 'text-emerald-800', 'border-emerald-300');
-      } else if (type === 'error') {
-        notif.classList.add('bg-rose-100', 'text-rose-800', 'border-rose-300');
-      } else if (type === 'warning') {
-        notif.classList.add('bg-amber-100', 'text-amber-800', 'border-amber-300');
-      } else {
-        notif.classList.add('bg-indigo-100', 'text-indigo-800', 'border-indigo-300');
-      }
-    }
-
-    // -----------------------------------------------------------------
     // SUBMIT ORDER
     // -----------------------------------------------------------------
     async function submitOrder() {
-      if (!currentUser) return alert("Sila log masuk terlebih dahulu.");
-      if (!pickupCoords || !dropoffCoords) return alert("Sila cari dan setkan lokasi Pick Up & Drop Off!");
+      if (!currentUser) {
+        alert("Sila log masuk terlebih dahulu.");
+        return;
+      }
+      if (!pickupCoords || !dropoffCoords) {
+        alert("Sila cari dan setkan lokasi Pick Up & Drop Off!");
+        return;
+      }
 
       const distFromUKM = calculateDistance(UKM_CENTER.lat, UKM_CENTER.lng, dropoffCoords.lat, dropoffCoords.lng);
       const isOutUkm = distFromUKM > MAX_UKM_RADIUS_KM;
-      const passengerQty = document.getElementById('passengerCount').value;
+      const paxCount = parseInt(document.getElementById('passengerCount').value);
 
       const orderData = {
         customerId: currentUser.uid,
@@ -490,25 +492,22 @@
         dropoffLng: dropoffCoords.lng,
         distanceKm: calculatedDistance,
         originalPrice: calculatedPrice,
-        finalPrice: calculatedPrice,
+        finalPrice: calculatedPrice, 
         isOutUkm: isOutUkm,
-        passengerCount: parseInt(passengerQty), // Maklumat bilangan penumpang
+        passengerCount: paxCount,
         paymentMethod: document.querySelector('input[name="payment"]:checked').value,
         bookingType: document.getElementById('bookingType').value,
         scheduledTime: document.getElementById('bookingType').value === 'scheduled' ? document.getElementById('scheduledTime').value : 'ASAP',
         notes: document.getElementById('orderNotes').value,
         status: 'SEARCHING',
-        
-        // Tetapan Sistem Agihan 1 Driver
-        pingedDriverId: null,
-        rejectedBy: [],
-
         driverId: null,
         driverName: null,
         driverPhoto: null,
         driverCarModel: null,
         driverCarPlate: null,
         expandedSearch: false,
+        pingedDriverId: null, // Untuk sistem 1 driver 1 masa
+        rejectedBy: [],       // Array driver yang reject
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       };
 
@@ -518,12 +517,13 @@
         
         document.getElementById('bookingSection').classList.add('hidden');
         document.getElementById('activeOrderPanel').classList.remove('hidden');
-        document.getElementById('uiNotification').classList.add('hidden');
 
         document.getElementById('summaryPickup').innerText = orderData.pickupAddress;
         document.getElementById('summaryDropoff').innerText = orderData.dropoffAddress;
-        document.getElementById('summaryPassengers').innerText = orderData.passengerCount;
-        document.getElementById('summaryPrice').innerText = `RM ${calculatedPrice}`;
+        document.getElementById('summaryPassenger').innerText = paxCount;
+        document.getElementById('summaryPrice').innerText = `${calculatedPrice}`;
+        
+        showUIMessage('<i class="fa-solid fa-spinner fa-spin mr-2"></i> Sistem sedang mencari pemandu yang berkelapangan...', 'info');
 
         startSearchTimer();
         listenToOrderUpdates(currentOrderDocId);
@@ -551,7 +551,7 @@
     function expandSearchRange() {
       if (!currentOrderDocId) return;
       db.collection('orders').doc(currentOrderDocId).update({ expandedSearch: true });
-      showUIMessage("Pencarian diluaskan! Driver luar radius 2km kini boleh menerima order ini.", "info");
+      showUIMessage('<i class="fa-solid fa-satellite-dish mr-2"></i> Pencarian diluaskan! Sila tunggu...', 'warning');
       document.getElementById('expandRangeBtn').classList.add('hidden');
     }
 
@@ -580,41 +580,44 @@
           document.getElementById('reportDriverBtn').classList.remove('hidden');
 
           if (data.finalPrice < data.originalPrice) {
-            showUIMessage(`Pemandu telah menawarkan diskaun harga baharu: RM ${data.finalPrice}`, "success");
+            showUIMessage(`<i class="fa-solid fa-tag mr-2"></i> Pemandu telah memberi diskaun! Harga baharu: <strong>RM ${Math.ceil(data.finalPrice)}</strong>`, 'success');
           } else {
-            showUIMessage("Pemandu telah menerima pesanan anda. Sila bersedia.", "success");
+            showUIMessage('<i class="fa-solid fa-circle-check mr-2"></i> Pemandu telah menerima pesanan anda. Sila tunggu.', 'success');
           }
-          document.getElementById('summaryPrice').innerText = `RM ${data.finalPrice}`;
+          
+          document.getElementById('summaryPrice').innerText = `${Math.ceil(data.finalPrice)}`;
 
         } else if (data.status === 'ARRIVED') {
-          showUIMessage("Pemandu telah sampai di lokasi Pick Up!", "warning");
+          showUIMessage('<i class="fa-solid fa-bullhorn mr-2"></i> <strong>Pemandu telah tiba di lokasi anda!</strong> Sila bersedia.', 'warning');
         } else if (data.status === 'IN_PROGRESS') {
-          showUIMessage("Perjalanan sedang berlangsung.", "info");
+          showUIMessage('<i class="fa-solid fa-truck-fast mr-2"></i> Perjalanan sedang berlangsung...', 'info');
         } else if (data.status === 'COMPLETED') {
-          showUIMessage("Perjalanan selesai! Terima kasih kerana menggunakan MyRide.", "success");
-          syncToGoogleSheet(data); 
-          setTimeout(() => resetOrderUI(), 3000);
-        } else if (data.status === 'CANCELLED') {
-          showUIMessage("Pesanan telah dibatalkan.", "error");
+          showUIMessage('<i class="fa-solid fa-flag-checkered mr-2"></i> Perjalanan selesai! Terima kasih menggunakan MyRide.', 'success');
           syncToGoogleSheet(data);
-          setTimeout(() => resetOrderUI(), 3000);
+          setTimeout(() => { resetOrderUI(); }, 4000); // Reset automatik selepas 4 saat
+        } else if (data.status === 'CANCELLED') {
+          showUIMessage('<i class="fa-solid fa-ban mr-2"></i> Pesanan dibatalkan.', 'error');
+          syncToGoogleSheet(data);
+          setTimeout(() => { resetOrderUI(); }, 4000);
         }
       });
     }
 
     async function cancelOrder() {
       if (!currentOrderDocId) return;
+
       const doc = await db.collection('orders').doc(currentOrderDocId).get();
       const data = doc.data();
 
       if (data.status === 'ACCEPTED' || data.status === 'ARRIVED') {
-        if (!confirm("Pembatalan mungkin memerlukan pampasan. Teruskan?")) return;
+        if (!confirm("Pembatalan mungkin memerlukan pampasan FPX RM3. Teruskan?")) return;
       }
+
       await db.collection('orders').doc(currentOrderDocId).update({ status: 'CANCELLED' });
     }
 
     function reportDriverLate() {
-      showUIMessage("Laporan pemandu lewat telah dihantar ke sistem.", "error");
+      showUIMessage('<i class="fa-solid fa-triangle-exclamation mr-2"></i> Laporan kelewatan telah direkodkan. Terima kasih.', 'warning');
     }
 
     function resetOrderUI() {
@@ -624,12 +627,12 @@
       document.getElementById('pickupInput').value = '';
       document.getElementById('dropoffInput').value = '';
       document.getElementById('orderNotes').value = '';
-      document.getElementById('passengerCount').value = '1';
       document.getElementById('pickupBadge').innerText = '';
       document.getElementById('dropoffBadge').innerText = '';
       document.getElementById('priceTxt').innerText = 'RM 0';
       document.getElementById('distanceTxt').innerText = '0.0 km';
       document.getElementById('outUkmTag').classList.add('hidden');
+      document.getElementById('uiNotification').classList.add('hidden');
       
       if (pickupMarker) map.removeLayer(pickupMarker);
       if (dropoffMarker) map.removeLayer(dropoffMarker);
@@ -642,9 +645,6 @@
       document.getElementById('bookingSection').classList.remove('hidden');
     }
 
-    // -----------------------------------------------------------------
-    // GOOGLE SHEETS SYNC
-    // -----------------------------------------------------------------
     function syncToGoogleSheet(orderData) {
       if (GOOGLE_SHEET_WEBHOOK_URL === "YOUR_GOOGLE_APPS_SCRIPT_WEBAPP_URL") return;
 
