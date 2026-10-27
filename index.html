@@ -480,14 +480,14 @@
       const isOutUkm = distFromUKM > MAX_UKM_RADIUS_KM;
       const paxCount = parseInt(document.getElementById('passengerCount').value);
 
-      const orderData = {
-        customerId: currentUser.uid,
-        customerName: currentUser.displayName,
-        customerPhoto: currentUser.photoURL,
-        pickupAddress: document.getElementById('pickupInput').value,
+ const orderData = {
+        customerId: currentUser.uid || "",
+        customerName: currentUser.displayName || "Pelanggan",
+        customerPhoto: currentUser.photoURL || "", // Elak nilai null yang merosakkan driver UI
+        pickupAddress: document.getElementById('pickupInput').value || "",
         pickupLat: pickupCoords.lat,
         pickupLng: pickupCoords.lng,
-        dropoffAddress: document.getElementById('dropoffInput').value,
+        dropoffAddress: document.getElementById('dropoffInput').value || "",
         dropoffLat: dropoffCoords.lat,
         dropoffLng: dropoffCoords.lng,
         distanceKm: calculatedDistance,
@@ -495,10 +495,10 @@
         finalPrice: calculatedPrice, 
         isOutUkm: isOutUkm,
         passengerCount: paxCount,
-        paymentMethod: document.querySelector('input[name="payment"]:checked').value,
-        bookingType: document.getElementById('bookingType').value,
+        paymentMethod: document.querySelector('input[name="payment"]:checked').value || "cash",
+        bookingType: document.getElementById('bookingType').value || "now",
         scheduledTime: document.getElementById('bookingType').value === 'scheduled' ? document.getElementById('scheduledTime').value : 'ASAP',
-        notes: document.getElementById('orderNotes').value,
+        notes: document.getElementById('orderNotes').value || "",
         status: 'SEARCHING',
         driverId: null,
         driverName: null,
@@ -506,11 +506,11 @@
         driverCarModel: null,
         driverCarPlate: null,
         expandedSearch: false,
-        pingedDriverId: null, // Untuk sistem 1 driver 1 masa
-        rejectedBy: [],       // Array driver yang reject
+        pingedDriverId: null,
+        rejectedBy: [],
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       };
-
+      
       try {
         const docRef = await db.collection('orders').add(orderData);
         currentOrderDocId = docRef.id;
